@@ -26,10 +26,7 @@ You can [get an API key](http://shotstack.io/) via the Shotstack web site.
 
 ## Run an example
 
-The examples directory includes a number of examples demonstrating the capabilities of the 
-Shotstack API.
-
-To run the images example:
+To run, update the `CLIP_URL` and `CLIP_DATE` constants in `app.js` and then:
 
 ```bash
 node start 
