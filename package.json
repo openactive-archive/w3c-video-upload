@@ -1,0 +1,19 @@
+{
+  "name": "w3c-video-upload",
+  "version": "1.0.0",
+  "description": "OpenActive W3C Community Group video formatting and upload, using Shotstack",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Nick Evans",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^0.21.1",
+    "cli-progress": "^3.9.0",
+    "get-video-duration": "^3.0.2",
+    "luxon": "^1.26.0",
+    "shotstack-sdk": "0.0.22"
+  }
+}
