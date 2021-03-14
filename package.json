@@ -15,7 +15,8 @@
     "express": "^4.17.1",
     "get-video-duration": "^3.0.2",
     "luxon": "^1.26.0",
-    "shotstack-sdk": "0.0.22"
+    "shotstack-sdk": "0.0.22",
+    "uuid": "^8.3.2"
   },
   "engines": {
     "node": "14.15.0"

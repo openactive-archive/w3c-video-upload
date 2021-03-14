@@ -4,6 +4,7 @@ const { DateTime } = require('luxon');
 const { getVideoDurationInSeconds } = require('get-video-duration');
 const express = require('express');
 const http = require('http');
+const { v4: uuidv4 } = require('uuid');
 
 const defaultClient = Shotstack.ApiClient.instance;
 const DeveloperKey = defaultClient.authentications['DeveloperKey'];
@@ -44,10 +45,13 @@ const STATUS_MAP = {
 
 const statusMap = {};
 
-async function createW3CVideo(url, date) {
+async function createW3CVideo(requestId, url, date) {
     const dateTitle = DateTime.fromISO(date).toFormat('d LLLL yyyy');
     const dateISO = DateTime.fromISO(date).toISODate();
-    const started = DateTime.now().toISO();
+
+    statusMap[requestId].status = 'GET DURATION';
+    statusMap[requestId].progress = '0%';
+    statusMap[requestId].inputUrl = url;
 
     const duration = await getVideoDurationInSeconds(url);
 
@@ -155,29 +159,27 @@ async function createW3CVideo(url, date) {
         throw new Error('Error with submission to render: ' + message);
     }
 
-    statusMap[id] = {
-        started,
-        inputUrl: url,
-        status: "DURATION FOUND",
-        videoDuration: duration
-    }
+    statusMap[requestId].id = id;
+    statusMap[requestId].status = "DURATION FOUND";
+    statusMap[requestId].videoDuration = duration;
+    statusMap[requestId].progress = `10%`;
 
-    checkStatus(id, dateISO);
+    checkStatus(requestId, id, dateISO);
 }
 
-function checkStatus(id, dateISO) {
+function checkStatus(requestId, id, dateISO) {
     setTimeout(x => {
         api.getRender(id).then((data) => {
             let status = data.response.status;
             let url = data.response.url;
         
             var progress = STATUS_MAP[status] || 0;
-            statusMap[id].progress = `${progress}%`;
-            statusMap[id].status = status.toUpperCase();
-            statusMap[id].elapsed =  DateTime.now().diff(DateTime.fromISO(statusMap[id].started), ['hours', 'minutes', 'seconds']).toObject();
+            statusMap[requestId].progress = `${progress}%`;
+            statusMap[requestId].status = status.toUpperCase();
+            statusMap[requestId].elapsed =  DateTime.now().diff(DateTime.fromISO(statusMap[requestId].started), ['hours', 'minutes', 'seconds']).toObject();
         
             if (status == 'done') {
-                statusMap[id].renderUrl = url;
+                statusMap[requestId].renderUrl = url;
 
                 if (process.env.YOUTUBE_KEY) {
                     axios
@@ -187,19 +189,19 @@ function checkStatus(id, dateISO) {
                         key: process.env.YOUTUBE_KEY
                     })
                     .then(res => {
-                        statusMap[id].status = 'UPLOADED';
+                        statusMap[requestId].status = 'UPLOADED';
                     })
                     .catch(error => {
-                        statusMap[id].error = 'YouTube upload failed: ' + error;
+                        statusMap[requestId].error = 'YouTube upload failed: ' + error;
                     })
                 }
             } else if (status == 'failed') {
-                statusMap[id].error = 'Processing failed: ' + data.response.error;
+                statusMap[requestId].error = 'Processing failed: ' + data.response.error;
             } else {
-                checkStatus(id, dateISO);
+                checkStatus(requestId, id, dateISO);
             }
         }, (error) => {
-            statusMap[id].error = 'Request failed or not found: ' + error;
+            statusMap[requestId].error = 'Request failed or not found: ' + error;
         });
     }, 1000);
 }
@@ -208,16 +210,23 @@ const app = express();
 app.use(express.json());
 
 app.post('/w3c-video', async(req, res, next) => {
-    try {
-        if (process.env.API_KEY && req.headers['x-api-key'] !== process.env.API_KEY) {
-            res.status(401).send();
-        } else {
-            const { url, dateCreated } = req.body;
-            await createW3CVideo(url, dateCreated);
-            res.status(204).send();
+    if (process.env.API_KEY && req.headers['x-api-key'] !== process.env.API_KEY) {
+        res.status(401).send();
+    } else {
+        const requestId = uuidv4();
+        const started = DateTime.now().toISO();
+        statusMap[requestId] = {
+            started,
+            status: "NEW REQUEST"
         }
-    } catch (error) {
-        return next(error)
+        try {
+            const { url, dateCreated } = req.body;
+            res.status(204).send();
+            await createW3CVideo(requestId, url, dateCreated);
+        } catch (error) {
+            statusMap[requestId].status = "ERROR";
+            statusMap[requestId].error = error.stack;
+        }
     }
 });
 
