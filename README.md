@@ -13,7 +13,7 @@ npm install
 The demos use the **staging** endpoint by default so use your provided **staging** key:
 
 ```bash
-export SHOTSTACK_KEY=your_key_here
+export SHOTSTACK_KEY=your_shotstack_key_here
 ```
 
 Windows users (Command Prompt):
@@ -26,8 +26,17 @@ You can [get an API key](http://shotstack.io/) via the Shotstack web site.
 
 ## Run an example
 
-To run, update the `CLIP_URL` and `CLIP_DATE` constants in `app.js` and then:
+To run start:
 
 ```bash
 node start 
+```
+
+Then `POST` to `/v3c-video`:
+
+```json
+{
+    "url": "https://us02web.zoom.us/rec/download/sOVeUAef-w1dpgEki5elXfSwlszB9tiLBGROg5fQWId5ogCmw_Yd4SDoRiFpmnlV8v21c9l4ZFCZZ1Ch.RtnqwTYyBKfvfwbb",
+    "dateCreated": "2021-03-10"
+}
 ```
