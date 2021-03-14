@@ -52,6 +52,7 @@ async function createW3CVideo(requestId, url, date) {
     statusMap[requestId].status = 'GET DURATION';
     statusMap[requestId].progress = '0%';
     statusMap[requestId].inputUrl = url;
+    statusMap[requestId].videoDateISO = dateISO;
 
     const duration = await getVideoDurationInSeconds(url);
 
@@ -148,6 +149,7 @@ async function createW3CVideo(requestId, url, date) {
     edit
         .setTimeline(timeline)
         .setOutput(output)
+        .setCallback('https://w3c-video-upload.herokuapp.com/complete')
         .setDisk('mount');
 
     const data = await api.postRender(edit);
@@ -167,43 +169,53 @@ async function createW3CVideo(requestId, url, date) {
     checkStatus(requestId, id, dateISO);
 }
 
-function checkStatus(requestId, id, dateISO) {
-    setTimeout(x => {
-        api.getRender(id).then((data) => {
-            let status = data.response.status;
-            let url = data.response.url;
-        
-            var progress = STATUS_MAP[status] || 0;
-            statusMap[requestId].progress = `${progress}%`;
-            statusMap[requestId].status = status.toUpperCase();
-            statusMap[requestId].elapsed =  DateTime.now().diff(DateTime.fromISO(statusMap[requestId].started), ['hours', 'minutes', 'seconds']).toObject();
-        
-            if (status == 'done') {
-                statusMap[requestId].renderUrl = url;
+function checkStatus(requestId, id, dateISO, completed) {
+    // If callback happens after polling has reported completion, do not complete twice
+    if (statusMap[requestId].progress === 'DONE' || statusMap[requestId].progress === 'UPLOADED') return;
 
-                if (process.env.YOUTUBE_KEY) {
-                    axios
-                    .post('https://hooks.zapier.com/hooks/catch/9730530/o7hge2m/', {
-                        url: url,
-                        date: dateISO,
-                        key: process.env.YOUTUBE_KEY
-                    })
-                    .then(res => {
-                        statusMap[requestId].status = 'UPLOADED';
-                    })
-                    .catch(error => {
-                        statusMap[requestId].error = 'YouTube upload failed: ' + error;
-                    })
-                }
-            } else if (status == 'failed') {
-                statusMap[requestId].error = 'Processing failed: ' + data.response.error;
-            } else {
-                checkStatus(requestId, id, dateISO);
+    api.getRender(id).then((data) => {
+        const status = data.response.status;
+        const url = data.response.url;
+
+        const now = completed ? DateTime.fromISO(completed) : DateTime.now();
+        const elapsed = now.diff(DateTime.fromISO(statusMap[requestId].started), ['hours', 'minutes', 'seconds']).toObject();
+    
+        var progress = STATUS_MAP[status] || 0;
+        statusMap[requestId].progress = `${progress}%`;
+        statusMap[requestId].status = status.toUpperCase();
+        statusMap[requestId].elapsed =  elapsed;
+    
+        if (status == 'done') {
+            statusMap[requestId].renderUrl = url;
+
+            if (process.env.YOUTUBE_KEY) {
+                axios
+                .post('https://hooks.zapier.com/hooks/catch/9730530/o7hge2m/', {
+                    url: url,
+                    date: dateISO,
+                    key: process.env.YOUTUBE_KEY
+                })
+                .then(res => {
+                    statusMap[requestId].status = 'UPLOADED';
+                })
+                .catch(error => {
+                    statusMap[requestId].error = 'YouTube upload failed: ' + error;
+                })
             }
-        }, (error) => {
-            statusMap[requestId].error = 'Request failed or not found: ' + error;
-        });
-    }, 1000);
+        } else if (status == 'failed') {
+            statusMap[requestId].error = 'Processing failed: ' + data.response.error;
+        } else {
+            // Poll every 5 seconds for the first minute - to catch errors and help with debugging - then wait for callback
+            const EVERY_FIVE_SECONDS = 1000 * 5;
+            if (elapsed.hours === 0 && elapsed.minutes === 0 && elapsed.seconds < 10) {
+                setTimeout(x => {
+                    checkStatus(requestId, id, dateISO);
+                }, EVERY_FIVE_SECONDS);
+            }
+        }
+    }, (error) => {
+        statusMap[requestId].error = 'Request failed or not found: ' + error;
+    });
 }
 
 const app = express();
@@ -227,6 +239,18 @@ app.post('/w3c-video', async(req, res, next) => {
             statusMap[requestId].status = "ERROR";
             statusMap[requestId].error = error.stack;
         }
+    }
+});
+
+app.post('/complete', async(req, res, next) => {
+    try {
+        const { id, completed } = req.body;
+        res.status(204).send();
+        Object.entries(statusMap).filter(([key, value]) => value.id === id).forEach(([requestId, obj]) => {
+            checkStatus(requestId, obj.id, obj.videoDateISO, completed);
+        });
+    } catch (error) {
+        console.error(error.stack);
     }
 });
 
