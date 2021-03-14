@@ -143,14 +143,14 @@ async function createW3CVideo(requestId, url, date) {
     let output = new Shotstack.Output;
     output
         .setFormat('mp4')
-        .setResolution('1080');
+        .setResolution('hd');
 
     let edit = new Shotstack.Edit;
     edit
         .setTimeline(timeline)
         .setOutput(output)
         .setCallback('https://w3c-video-upload.herokuapp.com/complete')
-        .setDisk('mount');
+        .setDisk('local');
 
     const data = await api.postRender(edit);
     
