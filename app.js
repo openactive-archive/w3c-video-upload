@@ -207,7 +207,7 @@ function checkStatus(requestId, id, dateISO, completed) {
         } else {
             // Poll every 5 seconds for the first minute - to catch errors and help with debugging - then wait for callback
             const EVERY_FIVE_SECONDS = 1000 * 5;
-            if (elapsed.hours === 0 && elapsed.minutes === 0 && elapsed.seconds < 10) {
+            if (elapsed.hours === 0 && elapsed.minutes === 0) {
                 setTimeout(x => {
                     checkStatus(requestId, id, dateISO);
                 }, EVERY_FIVE_SECONDS);
