@@ -169,7 +169,7 @@ async function createW3CVideo(requestId, url, date) {
     checkStatus(requestId, id, dateISO);
 }
 
-function checkStatus(requestId, id, dateISO, completed) {
+function checkStatus(requestId, id, dateISO, completed, orphaned) {
     // If callback happens after polling has reported completion, do not complete twice
     if (statusMap[requestId].progress === 'DONE' || statusMap[requestId].progress === 'UPLOADED') return;
 
@@ -183,7 +183,7 @@ function checkStatus(requestId, id, dateISO, completed) {
         var progress = STATUS_MAP[status] || 0;
         statusMap[requestId].progress = `${progress}%`;
         statusMap[requestId].status = status.toUpperCase();
-        statusMap[requestId].elapsed =  elapsed;
+        statusMap[requestId].elapsed = orphaned ? { error : "Server was restarted while rendering was in progress, no elapsed time calculated" } : elapsed;
     
         if (status == 'done') {
             statusMap[requestId].renderUrl = url;
@@ -246,9 +246,20 @@ app.post('/complete', async(req, res, next) => {
     try {
         const { id, completed } = req.body;
         res.status(204).send();
-        Object.entries(statusMap).filter(([key, value]) => value.id === id).forEach(([requestId, obj]) => {
-            checkStatus(requestId, obj.id, obj.videoDateISO, completed);
-        });
+        const entries = Object.entries(statusMap).filter(([key, value]) => value.id === id);
+        if (entries.length === 0) {
+            const requestId = uuidv4();
+            const started = DateTime.now().toISO();
+            statusMap[requestId] = {
+                started,
+                status: "ORPHANED CALLBACK"
+            }
+            checkStatus(requestId, id, '????', completed, true);
+        } else {
+            entries.forEach(([requestId, obj]) => {
+                checkStatus(requestId, id, obj.videoDateISO, completed);
+            });
+        }
     } catch (error) {
         console.error(error.stack);
     }
